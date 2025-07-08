@@ -1,0 +1,17 @@
+{
+  "f86b0807-af45-4624-ab5d-4adb6d66afcf": {
+    "label": "1 month",
+    "stars": 250,
+    "messages": 100
+  },
+  "16520c54-ad6f-4691-9017-c65129aa2570": {
+    "label": "2 months",
+    "stars": 350,
+    "messages": 150
+  },
+  "74b19649-68a2-433d-a135-7c580b3c840d": {
+    "label": "3 months",
+    "stars": 500,
+    "messages": 250
+  }
+}
