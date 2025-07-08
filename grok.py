@@ -16,7 +16,7 @@ from aiogram.fsm.state import State, StatesGroup
 from openai import AsyncOpenAI
 
 # --- Configuration ---
-BOT_TOKEN = "506337219:AAEeO5fUfZaLNKkm526fHjgcadCVyWajadw" # <-- Il tuo token bot effettivo
+BOT_TOKEN = "7875072880:AAH3zUfiLwIMCKp-DE0VjDBMqrTvFdBgcAY" # <-- Il tuo token bot effettivo
 PROVIDER_TOKEN = "5775769170:LIVE:TG_STZFFa5wUx6WApAVw57oQA" # <-- Il tuo token provider effettivo
 
 # MSG_LIMIT_FREE = 2 # OLD: Free messages count remains - Now loaded from config.json
