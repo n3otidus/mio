@@ -119,17 +119,15 @@ if st.session_state.alerts:
             a["trader"], a["mercato"], a["esito"], a["prezzo"], a["link"]))
     st.divider()
 
-tab1, tab2, tab3, tab4 = st.tabs(["🏆 Leaderboard", "🕵️ Trader Detail", "⚔️ Confronto", "🔍 Cerca Mercato"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 Leaderboard", "🕵️ Trader Detail", "⚔️ Confronto", "🔍 Cerca Mercato", "🤖 AI Consiglia"])
 
 with tab1:
     data = get_leaderboard(periodo, categoria, ordina, n_trader)
     if not data:
         st.error("Impossibile caricare la leaderboard.")
         st.stop()
-
     df_raw = pd.DataFrame(data)
     st.session_state["df_raw"] = df_raw
-
     for _, row in df_raw.iterrows():
         trader_name = row.get("userName", "N/A")
         wallet      = row.get("proxyWallet", "")
@@ -137,13 +135,11 @@ with tab1:
         vol_val     = float(row.get("vol", 0) or 0)
         pnl_color   = "green" if pnl_val >= 0 else "red"
         poly_url    = "https://polymarket.com/profile/" + wallet if wallet else "#"
-
         c1, c2, c3, c4, c5 = st.columns([1, 3, 2, 2, 2])
         c1.write("**#{}**".format(row.get("rank", "-")))
         c2.markdown("[**{}**]({})".format(trader_name, poly_url))
         c3.markdown("<span style=\"color:{}\">**{}**</span>".format(pnl_color, fmt_usd(pnl_val)), unsafe_allow_html=True)
         c4.write("Vol: " + fmt_usd(vol_val))
-
         in_watch = wallet in st.session_state.watchlist
         btn_label = "Rimuovi Watch" if in_watch else "+ Watch"
         if c5.button(btn_label, key="w_" + str(wallet)[:10]):
@@ -154,36 +150,29 @@ with tab1:
                 current_ids = set(p.get("asset", p.get("conditionId", "")) for p in positions)
                 st.session_state.watchlist[wallet] = {"name": trader_name, "last_positions": current_ids}
             st.rerun()
-
         st.divider()
 
 with tab2:
     df_raw2 = st.session_state.get("df_raw", pd.DataFrame())
     nomi2 = df_raw2["userName"].dropna().tolist() if "userName" in df_raw2.columns else []
-
     if not nomi2:
         st.info("Carica prima la leaderboard.")
     else:
         selected_name = st.selectbox("Scegli trader:", nomi2, key="sel2")
         wallet2 = get_wallet(selected_name, df_raw2)
-
         if wallet2:
             poly_url2 = "https://polymarket.com/profile/" + wallet2
             st.markdown("### {} — [Apri profilo Polymarket]({})".format(selected_name, poly_url2))
-
             with st.spinner("Calcolo score..."):
                 score_data = compute_score(wallet2)
-
             if score_data:
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Score affidabilita", "{}/100".format(score_data["score"]))
                 m2.metric("Win Rate", "{:.1f}%".format(score_data["win_rate"] * 100))
                 m3.metric("Trade analizzati", score_data["total_trades"])
                 m4.metric("PnL medio per trade", fmt_usd(score_data["avg_pnl"]))
-
             st.divider()
             st.subheader("Posizioni aperte")
-
             positions2 = get_positions(wallet2)
             if positions2:
                 for p in positions2:
@@ -201,7 +190,6 @@ with tab2:
                     st.markdown("---")
             else:
                 st.info("Nessuna posizione aperta.")
-
             st.divider()
             st.subheader("Attivita recente")
             activity2 = get_activity(wallet2, 20)
@@ -225,14 +213,12 @@ with tab2:
 with tab3:
     df_raw3 = st.session_state.get("df_raw", pd.DataFrame())
     nomi3 = df_raw3["userName"].dropna().tolist() if "userName" in df_raw3.columns else []
-
     if not nomi3:
         st.info("Carica prima la leaderboard.")
     else:
         ca3, cb3 = st.columns(2)
         trader_a = ca3.selectbox("Trader A", nomi3, index=0, key="cmp_a")
         trader_b = cb3.selectbox("Trader B", nomi3, index=min(1, len(nomi3) - 1), key="cmp_b")
-
         if st.button("Confronta", use_container_width=True):
             col_a, col_b = st.columns(2)
             for col, name in [(col_a, trader_a), (col_b, trader_b)]:
@@ -268,11 +254,9 @@ with tab3:
 with tab4:
     st.markdown("Trova quali top trader hanno una posizione aperta su un certo mercato.")
     keyword = st.text_input("Cerca mercato (es: Trump, Bitcoin, election...)")
-
     if keyword:
         df_raw4 = st.session_state.get("df_raw", pd.DataFrame())
         nomi4 = df_raw4["userName"].dropna().tolist() if "userName" in df_raw4.columns else []
-
         if not nomi4:
             st.info("Carica prima la leaderboard.")
         else:
@@ -299,7 +283,6 @@ with tab4:
                             })
                     progress.progress((i + 1) / len(nomi4))
                 progress.empty()
-
             if risultati:
                 st.success("Trovati {} trader con posizioni su \"{}\"".format(len(risultati), keyword))
                 df_ris = pd.DataFrame(risultati)
@@ -312,33 +295,28 @@ with tab4:
                     cb4.markdown("[Copia]({})".format(r["Link"]))
             else:
                 st.warning("Nessun trader in classifica ha posizioni su \"{}\".".format(keyword))
-                with tab5:
+
+with tab5:
     st.markdown("### Analisi automatica: cosa copiare adesso")
     st.caption("Scansiona i top trader, calcola uno score per ogni posizione aperta e consiglia le migliori da copiare.")
-
     n_scan = st.slider("Quanti trader scansionare", 3, 20, 10, key="scan_n")
-
     if st.button("Avvia analisi", use_container_width=True):
         df_raw5 = st.session_state.get("df_raw", pd.DataFrame())
         nomi5 = df_raw5["userName"].dropna().tolist() if "userName" in df_raw5.columns else []
-
         if not nomi5:
             st.warning("Carica prima la leaderboard dal tab Leaderboard.")
         else:
             candidati = []
             progress5 = st.progress(0)
             status5 = st.empty()
-
             for i, name in enumerate(nomi5[:n_scan]):
                 status5.write("Analisi {} ({}/{})...".format(name, i + 1, n_scan))
                 w5 = get_wallet(name, df_raw5)
                 if not w5:
                     continue
-
-                pnl_trader = float(df_raw5[df_raw5["userName"] == name]["pnl"].values[0] if "pnl" in df_raw5.columns else 0)
-                vol_trader = float(df_raw5[df_raw5["userName"] == name]["vol"].values[0] if "vol" in df_raw5.columns else 0)
-                rank_trader = int(df_raw5[df_raw5["userName"] == name]["rank"].values[0] if "rank" in df_raw5.columns else 99)
-
+                pnl_trader = float(df_raw5[df_raw5["userName"] == name]["pnl"].values[0] if "pnl" in df_raw5.columns and len(df_raw5[df_raw5["userName"] == name]) > 0 else 0)
+                vol_trader = float(df_raw5[df_raw5["userName"] == name]["vol"].values[0] if "vol" in df_raw5.columns and len(df_raw5[df_raw5["userName"] == name]) > 0 else 0)
+                rank_trader = int(df_raw5[df_raw5["userName"] == name]["rank"].values[0] if "rank" in df_raw5.columns and len(df_raw5[df_raw5["userName"] == name]) > 0 else 99)
                 positions5 = get_positions(w5)
                 for p in positions5:
                     cur_price = float(p.get("curPrice", 0))
@@ -348,31 +326,18 @@ with tab4:
                     outcome = p.get("outcome", "")
                     slug = p.get("slug", p.get("eventSlug", ""))
                     link = "https://polymarket.com/event/" + slug if slug else "https://polymarket.com/profile/" + w5
-
-                    # Salta posizioni gia quasi chiuse o a prezzo troppo alto
                     if cur_price <= 0.02 or cur_price >= 0.97:
                         continue
                     if size < 1:
                         continue
-
-                    # Score composito
-                    # 1. Qualita trader: PnL alto e rank basso = meglio
                     trader_score = min(40, max(0, pnl_trader / 500)) + max(0, (20 - rank_trader))
-
-                    # 2. Upside residuo: piu e basso il prezzo su YES, piu upside
                     if outcome.upper() in ("YES", "SI", "TRUE"):
                         upside_score = (1 - cur_price) * 30
                     else:
                         upside_score = cur_price * 30
-
-                    # 3. Conviction: piu soldi ha messo, piu ci crede
                     conviction_score = min(20, cur_value / 50)
-
-                    # 4. In profitto gia = segnale positivo
                     momentum_score = 10 if cash_pnl > 0 else 0
-
                     total_score = round(trader_score + upside_score + conviction_score + momentum_score, 1)
-
                     candidati.append({
                         "score": total_score,
                         "Trader": name,
@@ -384,36 +349,24 @@ with tab4:
                         "PnL trader": fmt_usd(pnl_trader),
                         "Link": link,
                     })
-
                 progress5.progress((i + 1) / n_scan)
-
             progress5.empty()
             status5.empty()
-
             if not candidati:
-                st.warning("Nessuna posizione trovata. Prova ad aumentare il numero di trader da scansionare.")
+                st.warning("Nessuna posizione trovata. Prova ad aumentare il numero di trader.")
             else:
                 candidati.sort(key=lambda x: x["score"], reverse=True)
                 top = candidati[:15]
-
                 st.success("Analisi completata. Top posizioni da copiare:")
-
                 for idx, c in enumerate(top):
                     medal = ["🥇", "🥈", "🥉"][idx] if idx < 3 else "#{}.".format(idx + 1)
-                    score_bar = "█" * int(c["score"] / 5) + "░" * (20 - int(c["score"] / 5))
-
                     with st.container():
                         st.markdown("#### {} {}".format(medal, c["Mercato"]))
                         col1, col2, col3 = st.columns([3, 3, 2])
-
                         col1.markdown("**Trader:** {}  \n**Esito:** {}  \n**Prezzo:** {}".format(
                             c["Trader"], c["Esito"], c["Prezzo attuale"]))
-
                         col2.markdown("**PnL trader:** {}  \n**Valore posizione:** {}  \n**PnL posizione:** {}".format(
                             c["PnL trader"], c["Valore trader"], c["PnL posizione"]))
-
-                        col3.markdown("**Score: {}/100**  \n`{}`".format(c["score"], score_bar))
+                        col3.markdown("**Score: {}/100**".format(c["score"]))
                         col3.markdown("[Copia questo trade]({})".format(c["Link"]))
-
                         st.divider()
-
