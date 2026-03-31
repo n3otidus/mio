@@ -13,7 +13,7 @@ def fetch(url, params=None):
         r = requests.get(url, params=params, timeout=10)
         r.raise_for_status()
         return r.json()
-    except Exception:
+    except:
         return None
 
 def fmt_usd(val):
@@ -24,13 +24,14 @@ def fmt_usd(val):
     except:
         return "N/A"
 
-# 🔥 FIX PRINCIPALE
+# 🔥 LINK FIX DEFINITIVO (NO 404)
 def get_market_link(p, wallet=None):
+    # 1. prova event
     slug = p.get("slug") or p.get("eventSlug")
-
     if slug:
         return f"https://polymarket.com/event/{slug}"
 
+    # 2. gamma API
     condition_id = p.get("conditionId")
     if condition_id:
         data = fetch(GAMMA_API + "/markets", params={"conditionId": condition_id})
@@ -39,7 +40,18 @@ def get_market_link(p, wallet=None):
             if slug:
                 return f"https://polymarket.com/event/{slug}"
 
+            market_id = data[0].get("id")
+            if market_id:
+                return f"https://polymarket.com/market/{market_id}"
+
+    # 3. fallback market diretto
+    market_id = p.get("marketId") or p.get("id")
+    if market_id:
+        return f"https://polymarket.com/market/{market_id}"
+
+    # 4. fallback profilo
     return f"https://polymarket.com/profile/{wallet}" if wallet else None
+
 
 def get_leaderboard(periodo, categoria, ordina, n):
     return fetch(DATA_API + "/v1/leaderboard",
@@ -48,12 +60,10 @@ def get_leaderboard(periodo, categoria, ordina, n):
 def get_positions(wallet):
     return fetch(DATA_API + "/positions", params={"user": wallet, "sizeThreshold": 0}) or []
 
-def get_activity(wallet, limit=30):
-    return fetch(DATA_API + "/activity", params={"user": wallet, "limit": limit}) or []
-
 def get_wallet(name, df):
     row = df[df["userName"] == name]["proxyWallet"].values if "proxyWallet" in df.columns else []
     return row[0] if len(row) > 0 else None
+
 
 # STATE
 if "watchlist" not in st.session_state:
@@ -98,7 +108,7 @@ for _, row in df.iterrows():
 
     st.divider()
 
-# WATCHLIST CHECK
+# WATCHLIST
 if st.session_state.watchlist:
     st.subheader("👀 Watchlist")
 
@@ -126,11 +136,11 @@ if st.session_state.watchlist:
 
             st.session_state.watchlist[wallet]["ids"] = current_ids
 
+
 # TRADER DETAIL
 st.subheader("🕵️ Trader Detail")
 
 names = df["userName"].dropna().tolist()
-
 selected = st.selectbox("Seleziona trader", names)
 
 wallet = get_wallet(selected, df)
@@ -151,7 +161,8 @@ if wallet:
         """)
         st.divider()
 
-# AI TAB (semplificata)
+
+# AI CONSIGLIA
 st.subheader("🤖 AI Consiglia")
 
 if st.button("Analizza"):
