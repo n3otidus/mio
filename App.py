@@ -312,3 +312,108 @@ with tab4:
                     cb4.markdown("[Copia]({})".format(r["Link"]))
             else:
                 st.warning("Nessun trader in classifica ha posizioni su \"{}\".".format(keyword))
+                with tab5:
+    st.markdown("### Analisi automatica: cosa copiare adesso")
+    st.caption("Scansiona i top trader, calcola uno score per ogni posizione aperta e consiglia le migliori da copiare.")
+
+    n_scan = st.slider("Quanti trader scansionare", 3, 20, 10, key="scan_n")
+
+    if st.button("Avvia analisi", use_container_width=True):
+        df_raw5 = st.session_state.get("df_raw", pd.DataFrame())
+        nomi5 = df_raw5["userName"].dropna().tolist() if "userName" in df_raw5.columns else []
+
+        if not nomi5:
+            st.warning("Carica prima la leaderboard dal tab Leaderboard.")
+        else:
+            candidati = []
+            progress5 = st.progress(0)
+            status5 = st.empty()
+
+            for i, name in enumerate(nomi5[:n_scan]):
+                status5.write("Analisi {} ({}/{})...".format(name, i + 1, n_scan))
+                w5 = get_wallet(name, df_raw5)
+                if not w5:
+                    continue
+
+                pnl_trader = float(df_raw5[df_raw5["userName"] == name]["pnl"].values[0] if "pnl" in df_raw5.columns else 0)
+                vol_trader = float(df_raw5[df_raw5["userName"] == name]["vol"].values[0] if "vol" in df_raw5.columns else 0)
+                rank_trader = int(df_raw5[df_raw5["userName"] == name]["rank"].values[0] if "rank" in df_raw5.columns else 99)
+
+                positions5 = get_positions(w5)
+                for p in positions5:
+                    cur_price = float(p.get("curPrice", 0))
+                    size = float(p.get("size", 0))
+                    cash_pnl = float(p.get("cashPnl", 0))
+                    cur_value = float(p.get("currentValue", p.get("curValue", 0)))
+                    outcome = p.get("outcome", "")
+                    slug = p.get("slug", p.get("eventSlug", ""))
+                    link = "https://polymarket.com/event/" + slug if slug else "https://polymarket.com/profile/" + w5
+
+                    # Salta posizioni gia quasi chiuse o a prezzo troppo alto
+                    if cur_price <= 0.02 or cur_price >= 0.97:
+                        continue
+                    if size < 1:
+                        continue
+
+                    # Score composito
+                    # 1. Qualita trader: PnL alto e rank basso = meglio
+                    trader_score = min(40, max(0, pnl_trader / 500)) + max(0, (20 - rank_trader))
+
+                    # 2. Upside residuo: piu e basso il prezzo su YES, piu upside
+                    if outcome.upper() in ("YES", "SI", "TRUE"):
+                        upside_score = (1 - cur_price) * 30
+                    else:
+                        upside_score = cur_price * 30
+
+                    # 3. Conviction: piu soldi ha messo, piu ci crede
+                    conviction_score = min(20, cur_value / 50)
+
+                    # 4. In profitto gia = segnale positivo
+                    momentum_score = 10 if cash_pnl > 0 else 0
+
+                    total_score = round(trader_score + upside_score + conviction_score + momentum_score, 1)
+
+                    candidati.append({
+                        "score": total_score,
+                        "Trader": name,
+                        "Mercato": p.get("title", "N/A"),
+                        "Esito": outcome,
+                        "Prezzo attuale": "{:.0f}%".format(cur_price * 100),
+                        "Valore trader": fmt_usd(cur_value),
+                        "PnL posizione": fmt_usd(cash_pnl),
+                        "PnL trader": fmt_usd(pnl_trader),
+                        "Link": link,
+                    })
+
+                progress5.progress((i + 1) / n_scan)
+
+            progress5.empty()
+            status5.empty()
+
+            if not candidati:
+                st.warning("Nessuna posizione trovata. Prova ad aumentare il numero di trader da scansionare.")
+            else:
+                candidati.sort(key=lambda x: x["score"], reverse=True)
+                top = candidati[:15]
+
+                st.success("Analisi completata. Top posizioni da copiare:")
+
+                for idx, c in enumerate(top):
+                    medal = ["🥇", "🥈", "🥉"][idx] if idx < 3 else "#{}.".format(idx + 1)
+                    score_bar = "█" * int(c["score"] / 5) + "░" * (20 - int(c["score"] / 5))
+
+                    with st.container():
+                        st.markdown("#### {} {}".format(medal, c["Mercato"]))
+                        col1, col2, col3 = st.columns([3, 3, 2])
+
+                        col1.markdown("**Trader:** {}  \n**Esito:** {}  \n**Prezzo:** {}".format(
+                            c["Trader"], c["Esito"], c["Prezzo attuale"]))
+
+                        col2.markdown("**PnL trader:** {}  \n**Valore posizione:** {}  \n**PnL posizione:** {}".format(
+                            c["PnL trader"], c["Valore trader"], c["PnL posizione"]))
+
+                        col3.markdown("**Score: {}/100**  \n`{}`".format(c["score"], score_bar))
+                        col3.markdown("[Copia questo trade]({})".format(c["Link"]))
+
+                        st.divider()
+
